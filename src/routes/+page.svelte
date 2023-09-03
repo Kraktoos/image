@@ -7,9 +7,13 @@
 	import { invalidateAll, goto } from '$app/navigation';
 	import { applyAction, deserialize } from '$app/forms';
 	import ImageComparisonPanZoom from '$lib/components/ImageComparisonPanZoom.svelte';
-	const DEFAULT_QUALITY_AVIF = 50;
-	const DEFAULT_QUALITY_WEBP = 75;
-	const DEFAULT_QUALITY = DEFAULT_QUALITY_AVIF;
+	const DEFAULT_QUALITIES = {
+		avif: 50,
+		webp: 75,
+		jpeg: 75
+		// jxl: 75
+	};
+	const DEFAULT_QUALITY = DEFAULT_QUALITIES.avif;
 
 	const toastStore = getToastStore();
 
@@ -17,8 +21,8 @@
 	let width: number | null;
 	let height: number | null;
 	let quality = DEFAULT_QUALITY;
-	let useAvif = true;
-	let isImageOptimizing = false;
+	let format = 'avif';
+	// let isImageOptimizing = false;
 
 	const handleFileInputChange = (event: Event) => {
 		if (!event.target) return;
@@ -36,7 +40,7 @@
 	};
 
 	export let form;
-	export let data;
+	// export let data;
 
 	let actualDimensions: any;
 
@@ -74,9 +78,11 @@
 	// when the form is received, prompt the user to download the file
 	$: if (form?.success && form?.image && selectedFile) {
 		let a = document.createElement('a');
-		a.href = 'data:image/webp;base64,' + form.image.toString();
+		a.href =
+			`data:image/${format}
+		;base64,` + form.image.toString();
 		a.download = `${selectedFile?.name.split('.')[0] || 'optimized'}-${width}x${height}.${
-			selectedFile?.name.split('.')[1] || 'webp'
+			{ avif: 'avif', webp: 'webp', jpeg: 'jpg' }[format]
 		}`;
 		a.click();
 		a.remove();
@@ -168,7 +174,7 @@
 		data.append('width', width!.toString());
 		data.append('height', height!.toString());
 		data.append('quality', quality.toString());
-		data.append('useAvif', useAvif.toString());
+		data.append('format', format);
 
 		const response = await fetch(this.action, {
 			method: 'POST',
@@ -184,6 +190,11 @@
 		}
 
 		applyAction(result);
+	}
+
+	function handleFormatChange(event: Event) {
+		const newFormat = (event.target as HTMLInputElement).value;
+		quality = DEFAULT_QUALITIES[newFormat as CodecFormat];
 	}
 </script>
 
@@ -263,22 +274,22 @@
 					</div>
 				</RangeSlider>
 
-				<SlideToggle
-					name="useAvif"
-					id="useAvif"
-					bind:checked={useAvif}
-					on:change={() => {
-						if (useAvif) {
-							quality = DEFAULT_QUALITY_AVIF;
-						} else {
-							quality = DEFAULT_QUALITY_WEBP;
-						}
-					}}
-				>
-					<div class="flex justify-between items-center">
-						<div class="font-bold">Use AVIF</div>
-					</div>
-				</SlideToggle>
+				<label class="label">
+					<span>Select</span>
+
+					<select
+						name="format"
+						id="format"
+						class="select select-bordered select-accent"
+						bind:value={format}
+						on:change={handleFormatChange}
+					>
+						<option value="avif">AVIF</option>
+						<option value="webp">WebP</option>
+						<option value="jpeg">JPEG</option>
+						<!-- <option value="jxl">JPEG XL</option> -->
+					</select>
+				</label>
 			</div>
 
 			<button type="submit" class="btn variant-filled">Optimize Image</button>
@@ -354,7 +365,7 @@
 						height = null;
 						quality = DEFAULT_QUALITY;
 						form = null;
-						useAvif = true;
+						format = 'avif';
 						actualDimensions = null;
 					}}
 				>

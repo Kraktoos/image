@@ -15,7 +15,7 @@ export const actions = {
 			const newWidth = formData.width as string;
 			const newHeight = formData.height as string;
 			const quality = formData.quality as string;
-			const useAvif = Boolean(formData.useAvif);
+			const format = formData.format as CodecFormat;
 
 			const sharpInstance = await sharp(Buffer.from(await image.arrayBuffer())).resize(
 				parseInt(newWidth),
@@ -23,14 +23,14 @@ export const actions = {
 				{ fit: 'inside' }
 			);
 
-			if (useAvif) {
+			if (format === 'avif') {
 				sharpInstance.avif({
 					quality: parseInt(quality),
 					lossless: false,
 					chromaSubsampling: '4:2:0',
 					effort: 4
 				});
-			} else {
+			} else if (format === 'webp') {
 				sharpInstance.webp({
 					quality: parseInt(quality),
 					lossless: false,
@@ -38,7 +38,28 @@ export const actions = {
 					alphaQuality: 100,
 					smartSubsample: true
 				});
+			} else if (format === 'jpeg') {
+				sharpInstance.jpeg({
+					quality: parseInt(quality),
+					progressive: true,
+					chromaSubsampling: '4:2:0',
+					trellisQuantisation: true,
+					overshootDeringing: true,
+					optimizeScans: true,
+					optimizeCoding: true,
+					quantizationTable: 3,
+					mozjpeg: true
+				});
 			}
+			// else if (format === 'jxl') {
+			// 	sharpInstance.jxl({
+			// 		quality: parseInt(quality),
+			// 		distance: 0,
+			// 		decodingTier: 0,
+			// 		lossless: false,
+			// 		effort: 4
+			// 	});
+			// }
 
 			const optimizedImageBuffer = await sharpInstance.toBuffer();
 

@@ -257,7 +257,7 @@
 				</div>
 			</div>
 
-			<div class="flex my-4 gap-4 justify-between items-center">
+			<div class="flex my-4 gap-5 justify-between items-center">
 				<RangeSlider
 					name="quality"
 					id="quality"
@@ -275,7 +275,7 @@
 				</RangeSlider>
 
 				<label class="label">
-					<span>Select</span>
+					<span>Format</span>
 
 					<select
 						name="format"

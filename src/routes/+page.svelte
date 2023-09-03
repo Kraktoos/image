@@ -1,20 +1,24 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { FileDropzone, LightSwitch, RangeSlider } from '@skeletonlabs/skeleton';
+	import { FileDropzone, LightSwitch, RangeSlider, SlideToggle } from '@skeletonlabs/skeleton';
 	import 'iconify-icon';
 	import { onMount } from 'svelte';
 	import { getToastStore } from '@skeletonlabs/skeleton';
 	import { invalidateAll, goto } from '$app/navigation';
 	import { applyAction, deserialize } from '$app/forms';
-	import ImageCompare from '$lib/components/ImageCompare.svelte';
 	import ImageComparisonPanZoom from '$lib/components/ImageComparisonPanZoom.svelte';
+	const DEFAULT_QUALITY_AVIF = 50;
+	const DEFAULT_QUALITY_WEBP = 75;
+	const DEFAULT_QUALITY = DEFAULT_QUALITY_AVIF;
 
 	const toastStore = getToastStore();
 
 	let selectedFile: File | null;
 	let width: number | null;
 	let height: number | null;
-	let quality = 80;
+	let quality = DEFAULT_QUALITY;
+	let useAvif = true;
+	let isImageOptimizing = false;
 
 	const handleFileInputChange = (event: Event) => {
 		if (!event.target) return;
@@ -164,6 +168,7 @@
 		data.append('width', width!.toString());
 		data.append('height', height!.toString());
 		data.append('quality', quality.toString());
+		data.append('useAvif', useAvif.toString());
 
 		const response = await fetch(this.action, {
 			method: 'POST',
@@ -241,7 +246,7 @@
 				</div>
 			</div>
 
-			<div class="flex mt-4 gap-2 justify-between">
+			<div class="flex my-4 gap-4 justify-between items-center">
 				<RangeSlider
 					name="quality"
 					id="quality"
@@ -258,8 +263,25 @@
 					</div>
 				</RangeSlider>
 
-				<button type="submit" class="btn variant-filled">Optimize Image</button>
+				<SlideToggle
+					name="useAvif"
+					id="useAvif"
+					bind:checked={useAvif}
+					on:change={() => {
+						if (useAvif) {
+							quality = DEFAULT_QUALITY_AVIF;
+						} else {
+							quality = DEFAULT_QUALITY_WEBP;
+						}
+					}}
+				>
+					<div class="flex justify-between items-center">
+						<div class="font-bold">Use AVIF</div>
+					</div>
+				</SlideToggle>
 			</div>
+
+			<button type="submit" class="btn variant-filled">Optimize Image</button>
 
 			<div>
 				{#if actualDimensions}
@@ -292,14 +314,10 @@
 			</ImageCompare> -->
 			<ImageComparisonPanZoom
 				image1={{
-					src: URL.createObjectURL(selectedFile),
-					width: actualDimensions.width,
-					height: actualDimensions.height
+					src: URL.createObjectURL(selectedFile)
 				}}
 				image2={{
-					src: 'data:image/webp;base64,' + form.image.toString(),
-					width: width,
-					height: height
+					src: 'data:image/webp;base64,' + form.image.toString()
 				}}
 			/>
 
@@ -307,21 +325,21 @@
 			<div class="flex justify-between">
 				<div>
 					<p>
-						Original Size: {selectedFile.size ? (selectedFile.size / 1024).toFixed(2) : 'unknown'} KB
+						Original Size: <code
+							>{selectedFile.size ? (selectedFile.size / 1024).toFixed(2) : 'unknown'} KB</code
+						>
 					</p>
 					<p>
-						Optimized Size: {form.image
-							? (((form.image.toString('base64').length / 1024) * 3) / 4).toFixed(2)
-							: 'unknown'} KB
+						Optimized Size: <code
+							>{form.image ? (((form.image.length / 1024) * 3) / 4).toFixed(2) : 'unknown'} KB</code
+						>
 					</p>
 				</div>
 				<div>
-					<p>
-						{Math.round(
-							((selectedFile.size ? selectedFile.size : 0) / (form.image ? form.image.length : 0)) *
-								100
-						)}
-						% Smaller
+					<p class="text-xl badge variant-filled">
+						-{Math.round(
+							100 - (((form.image.length / 1024) * 3) / 4 / (selectedFile.size / 1024)) * 100
+						)}%
 					</p>
 				</div>
 			</div>
@@ -330,11 +348,14 @@
 				<button
 					class="btn variant-filled"
 					on:click={() => {
+						// Clear all data
 						selectedFile = null;
 						width = null;
 						height = null;
-						quality = 80;
+						quality = DEFAULT_QUALITY;
 						form = null;
+						useAvif = true;
+						actualDimensions = null;
 					}}
 				>
 					Optimize Another

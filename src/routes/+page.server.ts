@@ -15,11 +15,32 @@ export const actions = {
 			const newWidth = formData.width as string;
 			const newHeight = formData.height as string;
 			const quality = formData.quality as string;
+			const useAvif = Boolean(formData.useAvif);
 
-			const optimizedImageBuffer = await sharp(Buffer.from(await image.arrayBuffer()))
-				.resize(parseInt(newWidth), parseInt(newHeight), { fit: 'inside' })
-				.webp({ quality: parseInt(quality) })
-				.toBuffer();
+			const sharpInstance = await sharp(Buffer.from(await image.arrayBuffer())).resize(
+				parseInt(newWidth),
+				parseInt(newHeight),
+				{ fit: 'inside' }
+			);
+
+			if (useAvif) {
+				sharpInstance.avif({
+					quality: parseInt(quality),
+					lossless: false,
+					chromaSubsampling: '4:2:0',
+					effort: 4
+				});
+			} else {
+				sharpInstance.webp({
+					quality: parseInt(quality),
+					lossless: false,
+					effort: 4,
+					alphaQuality: 100,
+					smartSubsample: true
+				});
+			}
+
+			const optimizedImageBuffer = await sharpInstance.toBuffer();
 
 			return {
 				success: true,

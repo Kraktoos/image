@@ -13,7 +13,8 @@
 		jpeg: 75
 		// jxl: 75
 	};
-	const DEFAULT_QUALITY = DEFAULT_QUALITIES.avif;
+	const DEFAULT_FORMAT = 'webp';
+	const DEFAULT_QUALITY = DEFAULT_QUALITIES[DEFAULT_FORMAT as CodecFormat];
 
 	const toastStore = getToastStore();
 
@@ -21,7 +22,7 @@
 	let width: number | null;
 	let height: number | null;
 	let quality = DEFAULT_QUALITY;
-	let format = 'avif';
+	let format = DEFAULT_FORMAT;
 	// let isImageOptimizing = false;
 
 	const handleFileInputChange = (event: Event) => {
@@ -292,7 +293,7 @@
 				</label>
 			</div>
 
-			<button type="submit" class="btn variant-filled">Optimize Image</button>
+			<button type="submit" class="btn variant-filled mb-2">Optimize Image</button>
 
 			<div>
 				{#if actualDimensions}
@@ -349,7 +350,10 @@
 				<div>
 					<p class="text-xl badge variant-filled">
 						-{Math.round(
-							100 - (((form.image.length / 1024) * 3) / 4 / (selectedFile.size / 1024)) * 100
+							100 -
+								Math.round(
+									(((form.image.length / 1024) * 3) / 4 / (selectedFile.size / 1024)) * 100
+								)
 						)}%
 					</p>
 				</div>
@@ -365,7 +369,7 @@
 						height = null;
 						quality = DEFAULT_QUALITY;
 						form = null;
-						format = 'avif';
+						format = DEFAULT_FORMAT;
 						actualDimensions = null;
 					}}
 				>

@@ -1,7 +1,6 @@
 <script lang="ts">
 	import { onMount, afterUpdate, createEventDispatcher } from 'svelte';
 	import Cropper from 'cropperjs';
-	import 'cropperjs/dist/cropper.min.css';
 
 	export let cropperInstance: Cropper;
 	let image: HTMLImageElement;
@@ -21,9 +20,11 @@
 		}
 	};
 
-	onMount(() => {
+	onMount(async () => {
 		originalImage = src;
 		cropperInstance = new Cropper(image, options);
+
+		await import('cropperjs/dist/cropper.min.css');
 	});
 
 	afterUpdate(() => {

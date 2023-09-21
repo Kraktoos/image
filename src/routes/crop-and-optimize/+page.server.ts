@@ -1,4 +1,5 @@
 import sharp from 'sharp';
+import { images } from '$lib/stores/images.js';
 
 export const actions = {
 	default: async ({
@@ -11,16 +12,21 @@ export const actions = {
 		try {
 			const formData = Object.fromEntries(await request.formData());
 
-			const image = formData.image as unknown as File;
+			const image = formData.image as string;
 			const newWidth = formData.width as string;
 			const newHeight = formData.height as string;
 			const quality = formData.quality as string;
 			const format = formData.format as CodecFormat;
 
-			const sharpInstance = await sharp(Buffer.from(await image.arrayBuffer())).resize(
+			console.log('image', image);
+
+			// const sharpInstance = await sharp(Buffer.from(await image.arrayBuffer())).resize(
+			const sharpInstance = await sharp(Buffer.from(image, 'base64')).resize(
 				parseInt(newWidth),
 				parseInt(newHeight),
-				{ fit: 'inside' }
+				{
+					fit: 'inside'
+				}
 			);
 
 			if (format === 'avif') {
@@ -51,6 +57,8 @@ export const actions = {
 					mozjpeg: true
 				});
 			}
+
+			// LEAVE COMMENTED FOR NOW
 			// else if (format === 'jxl') {
 			// 	sharpInstance.jxl({
 			// 		quality: parseInt(quality),

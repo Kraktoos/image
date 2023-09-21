@@ -14,7 +14,10 @@
 		render
 	};
 
-	let scaleWidth, scaleHeight, x, y;
+	let scaleWidth: number;
+	let scaleHeight: number;
+	let x: number;
+	let y: number;
 
 	function render(ctx: CanvasRenderingContext2D) {
 		if (!left) return;

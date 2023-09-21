@@ -1,12 +1,22 @@
 <script lang="ts">
 	import { enhance } from '$app/forms';
-	import { FileDropzone, LightSwitch, RangeSlider, SlideToggle } from '@skeletonlabs/skeleton';
+	import {
+		FileButton,
+		FileDropzone,
+		LightSwitch,
+		RangeSlider,
+		SlideToggle
+	} from '@skeletonlabs/skeleton';
 	import 'iconify-icon';
 	import { onMount } from 'svelte';
 	import { getToastStore } from '@skeletonlabs/skeleton';
 	import { invalidateAll, goto } from '$app/navigation';
 	import { applyAction, deserialize } from '$app/forms';
 	import ImageComparisonPanZoom from '$lib/components/ImageComparisonPanZoom.svelte';
+	import ImageCropper from '$lib/components/ImageCropper.svelte';
+	import { images } from '$lib/stores/images.js';
+	import { Buffer } from 'buffer';
+
 	const DEFAULT_QUALITIES = {
 		avif: 50,
 		webp: 75,
@@ -23,76 +33,6 @@
 	let height: number | null;
 	let quality = DEFAULT_QUALITY;
 	let format = DEFAULT_FORMAT;
-	// let isImageOptimizing = false;
-
-	const handleFileInputChange = (event: Event) => {
-		if (!event.target) return;
-		if (!(event.target instanceof HTMLInputElement)) return;
-		if (!event.target.files) return;
-		selectedFile = event.target.files[0];
-
-		// set max width and height to the image's current dimensions
-		const image = new Image();
-		image.src = URL.createObjectURL(selectedFile);
-		image.onload = () => {
-			width = image.width;
-			height = image.height;
-		};
-	};
-
-	export let form;
-	// export let data;
-
-	let actualDimensions: any;
-
-	function getImageDimensions(file: File) {
-		if (!file) return;
-		return new Promise<{ width: number; height: number }>((resolve) => {
-			const image = new Image();
-			image.src = URL.createObjectURL(file);
-			image.onload = () => {
-				resolve({ width: image.width, height: image.height });
-			};
-		});
-	}
-
-	$: getImageDimensions(selectedFile!)?.then((dimensions) => {
-		actualDimensions = dimensions;
-	});
-
-	function handleWidthChange(event: Event) {
-		if (!width) {
-			height = null;
-			return;
-		}
-		height = Math.round((width / actualDimensions.width) * actualDimensions.height);
-	}
-
-	function handleHeightChange(event: Event) {
-		if (!height) {
-			width = null;
-			return;
-		}
-		width = Math.round((height / actualDimensions.height) * actualDimensions.width);
-	}
-
-	// when the form is received, prompt the user to download the file
-	$: if (form?.success && form?.image && selectedFile) {
-		let a = document.createElement('a');
-		a.href =
-			`data:image/${format}
-		;base64,` + form.image.toString();
-		a.download = `${selectedFile?.name.split('.')[0] || 'optimized'}-${width}x${height}.${
-			{ avif: 'avif', webp: 'webp', jpeg: 'jpg' }[format]
-		}`;
-		a.click();
-		a.remove();
-
-		toastStore.trigger({
-			message: 'Image was successfully optimized.',
-			background: 'variant-filled-success'
-		});
-	}
 
 	let lastTarget: any = null;
 
@@ -109,6 +49,34 @@
 	}
 
 	onMount(() => {
+		window.Buffer = Buffer;
+
+		window.addEventListener('paste', async function (e) {
+			if (!e.clipboardData) return;
+			if (!e.clipboardData.files) return;
+			if (e.clipboardData.files.length > 0) {
+				// check if file is an image
+				if (!e.clipboardData.files[0].type.startsWith('image/')) {
+					toastStore.trigger({
+						message: 'Please paste an image.',
+						background: 'variant-filled-error'
+					});
+					return;
+				}
+
+				selectedFile = e.clipboardData.files[0];
+
+				// images.add(Buffer.from(await selectedFile.arrayBuffer()));
+				images.add(
+					`data:${selectedFile.type};base64,${Buffer.from(
+						await selectedFile.arrayBuffer()
+					).toString('base64')}`
+				);
+
+				goto('/crop-and-optimize');
+			}
+		});
+
 		const dropzone = document.querySelector('#dropzone') as HTMLElement;
 		const textnode = document.querySelector('#textnode') as HTMLElement;
 		window.addEventListener('dragenter', function (e) {
@@ -132,7 +100,7 @@
 			e.preventDefault();
 		});
 
-		window.addEventListener('drop', function (e: DragEvent) {
+		window.addEventListener('drop', async function (e: DragEvent) {
 			e.preventDefault();
 			dropzone.style.visibility = 'hidden';
 			dropzone.style.opacity = '0%';
@@ -151,51 +119,31 @@
 
 				selectedFile = e.dataTransfer.files[0];
 
-				// set max width and height to the image's current dimensions
-				const image = new Image();
-				image.src = URL.createObjectURL(selectedFile);
-				image.onload = () => {
-					width = image.width;
-					height = image.height;
-				};
+				images.add(
+					`data:${selectedFile.type};base64,${Buffer.from(
+						await selectedFile.arrayBuffer()
+					).toString('base64')}`
+				);
+
+				goto('/crop-and-optimize');
 			}
 		});
 	});
 
-	async function handleSubmit(event: Event) {
-		const data = new FormData();
-		if (!selectedFile) {
-			toastStore.trigger({
-				message: 'Please select an image.',
-				background: 'variant-filled-error'
-			});
-			return;
-		}
-		data.append('image', selectedFile);
-		data.append('width', width!.toString());
-		data.append('height', height!.toString());
-		data.append('quality', quality.toString());
-		data.append('format', format);
+	async function handleFileChange(event: Event) {
+		const target = event.target as HTMLInputElement;
+		if (!target.files) return;
+		if (!target.files.length) return;
 
-		const response = await fetch(this.action, {
-			method: 'POST',
-			body: data
-		});
+		selectedFile = target.files[0];
 
-		/** @type {import('@sveltejs/kit').ActionResult} */
-		const result = deserialize(await response.text());
+		images.add(
+			`data:${selectedFile.type};base64,${Buffer.from(await selectedFile.arrayBuffer()).toString(
+				'base64'
+			)}`
+		);
 
-		if (result.type === 'success') {
-			// rerun all `load` functions, following the successful update
-			await invalidateAll();
-		}
-
-		applyAction(result);
-	}
-
-	function handleFormatChange(event: Event) {
-		const newFormat = (event.target as HTMLInputElement).value;
-		quality = DEFAULT_QUALITIES[newFormat as CodecFormat];
+		goto('/crop-and-optimize');
 	}
 </script>
 
@@ -209,175 +157,11 @@
 	</h1>
 	<h4 class="text-xl mb-5">Instantly optimize your images for the web.</h4>
 
-	{#if !form?.success || !form?.image || !selectedFile}
-		<form method="POST" enctype="multipart/form-data" on:submit|preventDefault={handleSubmit}>
-			<div style="visibility:hidden; opacity:0" id="dropzone">
-				<div id="textnode">Drop anywhere!</div>
-			</div>
+	<FileButton name="image" on:change={handleFileChange} />
 
-			<FileDropzone id="image" name="image" accept="image/*" on:change={handleFileInputChange}>
-				<svelte:fragment slot="lead">
-					<iconify-icon icon="material-symbols:image" class="mx-auto text-6xl" />
-				</svelte:fragment>
-				<svelte:fragment slot="message">
-					<p>Drop an image here or click to select a file.</p>
-					<p>Supported formats: PNG, JPEG, WEBP</p>
-				</svelte:fragment>
-				<svelte:fragment slot="meta">
-					<p>Max file size: 10MB</p>
-				</svelte:fragment>
-			</FileDropzone>
-
-			<div class="flex mt-4 gap-2 justify-between">
-				<div class="input-group input-group-divider grid-cols-[auto_1fr]">
-					<div class="input-group-shim">
-						<iconify-icon icon="material-symbols:width" class="text-2xl" />
-					</div>
-					<input
-						type="number"
-						id="width"
-						name="width"
-						bind:value={width}
-						placeholder="New Width"
-						on:change={handleWidthChange}
-					/>
-				</div>
-
-				<div class="input-group input-group-divider grid-cols-[auto_1fr]">
-					<div class="input-group-shim">
-						<iconify-icon icon="material-symbols:height" class="text-2xl" />
-					</div>
-					<input
-						type="number"
-						id="height"
-						name="height"
-						bind:value={height}
-						placeholder="New Height"
-						on:change={handleHeightChange}
-					/>
-				</div>
-			</div>
-
-			<div class="flex my-4 gap-5 justify-between items-center">
-				<RangeSlider
-					name="quality"
-					id="quality"
-					min={5}
-					max={100}
-					bind:value={quality}
-					step={5}
-					ticked
-					class="flex-1"
-				>
-					<div class="flex justify-between items-center">
-						<div class="font-bold">Quality</div>
-						<div class="text-xs">{quality} / 100</div>
-					</div>
-				</RangeSlider>
-
-				<label class="label">
-					<span>Format</span>
-
-					<select
-						name="format"
-						id="format"
-						class="select select-bordered select-accent"
-						bind:value={format}
-						on:change={handleFormatChange}
-					>
-						<option value="avif">AVIF</option>
-						<option value="webp">WebP</option>
-						<option value="jpeg">JPEG</option>
-						<!-- <option value="jxl">JPEG XL</option> -->
-					</select>
-				</label>
-			</div>
-
-			<button type="submit" class="btn variant-filled mb-2">Optimize Image</button>
-
-			<div>
-				{#if actualDimensions}
-					<p>Current Dimensions: {actualDimensions.width}x{actualDimensions.height}</p>
-				{/if}
-				{#if selectedFile}
-					{#if selectedFile.size > 1024 * 1024}
-						<p>
-							Current file size: {selectedFile.size
-								? (selectedFile.size / 1024 / 1024).toFixed(2)
-								: 'unknown'}
-							MB
-						</p>
-					{:else}
-						<p>
-							Current file size: {selectedFile.size
-								? (selectedFile.size / 1024).toFixed(2)
-								: 'unknown'}
-							KB
-						</p>
-					{/if}
-				{/if}
-			</div>
-		</form>
-	{:else}
-		<div class="flex flex-col gap-4">
-			<!-- <ImageCompare class="max-w-fll w-full">
-				<img src={URL.createObjectURL(selectedFile)} alt="Original" slot="left" />
-				<img src={'data:image/webp;base64,' + form.image.toString()} alt="Optimized" slot="right" />
-			</ImageCompare> -->
-			<ImageComparisonPanZoom
-				image1={{
-					src: URL.createObjectURL(selectedFile)
-				}}
-				image2={{
-					src: 'data:image/webp;base64,' + form.image.toString()
-				}}
-			/>
-
-			<!-- Show old image size and new -->
-			<div class="flex justify-between">
-				<div>
-					<p>
-						Original Size: <code
-							>{selectedFile.size ? (selectedFile.size / 1024).toFixed(2) : 'unknown'} KB</code
-						>
-					</p>
-					<p>
-						Optimized Size: <code
-							>{form.image ? (((form.image.length / 1024) * 3) / 4).toFixed(2) : 'unknown'} KB</code
-						>
-					</p>
-				</div>
-				<div>
-					<p class="text-xl badge variant-filled">
-						-{Math.round(
-							100 -
-								Math.round(
-									(((form.image.length / 1024) * 3) / 4 / (selectedFile.size / 1024)) * 100
-								)
-						)}%
-					</p>
-				</div>
-			</div>
-
-			<div class="flex justify-center">
-				<button
-					class="btn variant-filled"
-					on:click={() => {
-						// Clear all data
-						selectedFile = null;
-						width = null;
-						height = null;
-						quality = DEFAULT_QUALITY;
-						form = null;
-						format = DEFAULT_FORMAT;
-						actualDimensions = null;
-					}}
-				>
-					Optimize Another
-				</button>
-			</div>
-		</div>
-	{/if}
+	<div style="visibility:hidden; opacity:0" id="dropzone">
+		<div id="textnode">Drop anywhere!</div>
+	</div>
 </main>
 
 <style>
